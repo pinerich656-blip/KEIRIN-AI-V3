@@ -406,34 +406,43 @@ function parseOdds(text){
 function prob(a,b,c, flow){
   let total = a.lead + b.chase + c.attack;
 
-  // すんなり先行
+  // 基本
   if (flow.smooth) {
-    if (a.line_pos === 1 && b.line_pos === 2) total *= 1.08;
-    if (a.line_pos !== 1) total *= 0.94;
+    if (a.line_pos === 1 && b.line_pos === 2) total *= 1.10;
+    if (a.line_pos !== 1) total *= 0.93;
   }
 
-  // 早駆けで番手有利
   if (flow.earlyPace) {
     if (a.line_pos === 2) total *= 1.08;
-    if (b.line_pos === 1) total *= 1.04;
+    if (b.line_pos === 1) total *= 1.03;
   }
 
-  // 踏み合いで番手・単騎・自在が浮上
   if (flow.duel) {
-    if (a.line_pos === 2) total *= 1.06;
-    if (b.line_pos === 2) total *= 1.05;
+    if (a.line_pos === 2) total *= 1.05;
+    if (b.line_pos === 2) total *= 1.04;
     if (b.line_len === 1 || b.style === '両') total *= 1.05;
-    if (c.line_len === 1 || c.style === '両') total *= 1.07;
+    if (c.line_len === 1 || c.style === '両') total *= 1.06;
   }
+
+  // 本線ライン優遇
+  if (a.line === b.line) total *= 1.08;
+  if (a.line === b.line && b.line === c.line) total *= 1.05;
+
+  // 長いライン優遇、単騎は少し不利
+  if (a.line_len >= 3) total *= 1.08;
+  if (a.line_len === 1) total *= 0.90;
+
+  // 弱いラインの頭を抑える
+  if (a.line_len <= 2 && a.lead < 95) total *= 0.88;
 
   // 番手離れリスク
   if (b.line_pos === 2 && b.follow_risk > 0.18) total *= 0.82;
 
   // 単騎・自在の2,3着差し込み
-  if (b.line_len === 1 || b.style === '両') total *= 1.03;
-  if (c.line_len === 1 || c.style === '両') total *= 1.05;
+  if (b.line_len === 1 || b.style === '両') total *= 1.02;
+  if (c.line_len === 1 || c.style === '両') total *= 1.04;
 
-  return Math.max(0.01, Math.min(total / 300, 0.6));
+  return Math.max(0.01, Math.min(total / 320, 0.42));
 }
 
 
@@ -472,8 +481,8 @@ function buildTickets(racers, oddsMap){
     }
   }
 
-  tickets.sort((x,y)=>y.ev-x.ev || y.p-x.p);
-  return tickets.slice(0, 20);
+  tickets.sort((x,y)=>(y.ev * 0.7 + y.p * 30) - (x.ev * 0.7 + x.p * 30));
+return tickets.slice(0, 20);
 }
 
 function addMainLineTickets(racers, lineInput){
@@ -545,10 +554,14 @@ document.getElementById('analyzeBtn').addEventListener('click', ()=>{
     const mainTickets = addMainLineTickets(enriched, document.getElementById('lineInput').value);
 
     const finalTickets = tickets.sort((a,b)=>{
-      if (mainTickets.includes(a.ticket) && !mainTickets.includes(b.ticket)) return -1;
-      if (!mainTickets.includes(a.ticket) && mainTickets.includes(b.ticket)) return 1;
-      return b.ev - a.ev;
-    });
+  if (mainTickets.includes(a.ticket) && !mainTickets.includes(b.ticket)) return -1;
+  if (!mainTickets.includes(a.ticket) && mainTickets.includes(b.ticket)) return 1;
+
+  const scoreA = a.ev * 0.7 + a.p * 30;
+  const scoreB = b.ev * 0.7 + b.p * 30;
+
+  return scoreB - scoreA;
+});
 
     msg.textContent = `${racers.length}名を解析しました。`;
     render(enriched, finalTickets);
