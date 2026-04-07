@@ -128,6 +128,7 @@ const sample = `枠 番
 0
 0
 0`;
+
 document.getElementById('sampleBtn').addEventListener('click', ()=>{
   document.getElementById('raw').value = sample;
   document.getElementById('lineInput').value = '2-4 / 1 / 3 / 5 / 6 / 7';
@@ -141,32 +142,44 @@ function normalizeText(s){
     .replace(/\r/g, '\n')
     .replace(/　/g, ' ');
 }
+
 function cleanLine(s){
   return normalizeText(s).replace(/[ \t]+/g, ' ').trim();
 }
+
 function normalizedHeaderKey(s){
   return cleanLine(s).replace(/[\s/]+/g, '').replace(/Ｂ/g,'B');
 }
+
 function isHeaderLine(s){
   const t = normalizedHeaderKey(s);
   return ['枠番','車番','選手名','府県級班前現脚質','競走得点','逃','捲','差','マ','B','調子'].includes(t);
 }
+
 function isInfoLine(s){
   return /\/.+\//.test(s);
 }
+
 function parseRaw(text){
   const rawLines = normalizeText(text).split('\n').map(cleanLine).filter(Boolean);
   const lines = rawLines.filter(x => !isHeaderLine(x));
   const racers = [];
   let i = 0;
+
   while (i < lines.length) {
-    if (!/^\d+$/.test(lines[i])) { i++; continue; }
+    if (!/^\d+$/.test(lines[i])) {
+      i++;
+      continue;
+    }
 
     const firstNum = parseInt(lines[i], 10);
     i++;
 
     let name = lines[i] || '';
-    if (!name || /^\d+$/.test(name) || isInfoLine(name)) { continue; }
+    if (!name || /^\d+$/.test(name) || isInfoLine(name)) {
+      i++;
+      continue;
+    }
     i++;
 
     let info = lines[i] || '';
@@ -179,13 +192,17 @@ function parseRaw(text){
 
     const nums = [];
     while (i < lines.length && nums.length < 6) {
-      if (/^-?\d+(?:\.\d+)?$/.test(lines[i])) nums.push(lines[i]);
-      else break;
+      if (/^-?\d+(?:\.\d+)?$/.test(lines[i])) {
+        nums.push(lines[i]);
+      } else {
+        break;
+      }
       i++;
     }
+
     if (nums.length < 6) continue;
 
-    const carNo = firstNum; // 今回の貼り付け形式では先頭数字を車番扱い
+    const carNo = firstNum;
     const safeName = name.replace(/追加/g, '').trim();
     const parts = info.split('/').map(v => cleanLine(v));
     const pref = (parts[0] || '').replace(/\s+/g, '');
@@ -201,31 +218,52 @@ function parseRaw(text){
       makuri: parseInt(nums[2], 10) || 0,
       sashi: parseInt(nums[3], 10) || 0,
       mark: parseInt(nums[4], 10) || 0,
-      b: parseInt(nums[5], 10) || 0,
+      b: parseInt(nums[5], 10) || 0
     });
   }
+
   return racers.sort((a,b)=>a.car_no-b.car_no);
 }
+
 function parseLines(lineInput, racers){
   const map = {};
   const txt = cleanLine(lineInput);
-  if(!txt){ racers.forEach((r, idx) => map[r.car_no] = String.fromCharCode(65 + idx)); return map; }
+
+  if(!txt){
+    racers.forEach((r, idx) => {
+      map[r.car_no] = String.fromCharCode(65 + idx);
+    });
+    return map;
+  }
+
   txt.split('/').map(cleanLine).filter(Boolean).forEach((grp, idx)=>{
     const key = String.fromCharCode(65 + idx);
-    grp.split('-').map(cleanLine).filter(Boolean).forEach(n => map[parseInt(n,10)] = key);
+    grp.split('-').map(cleanLine).filter(Boolean).forEach(n => {
+      map[parseInt(n,10)] = key;
+    });
   });
-  racers.forEach((r, idx)=>{ if(!map[r.car_no]) map[r.car_no] = 'Z' + idx; });
+
+  racers.forEach((r, idx)=>{
+    if(!map[r.car_no]) map[r.car_no] = 'Z' + idx;
+  });
+
   return map;
 }
+
 function enrich(racers, lineInput){
   const lineMap = parseLines(lineInput, racers);
   racers.forEach(r => r.line = lineMap[r.car_no]);
+
   const grouped = {};
-  racers.forEach(r => { (grouped[r.line] ??= []).push(r); });
+  racers.forEach(r => {
+    (grouped[r.line] ??= []).push(r);
+  });
 
   const rawGroups = cleanLine(lineInput) ? lineInput.split('/').map(cleanLine) : [];
+
   Object.values(grouped).forEach(group => {
     group.sort((a,b)=>a.car_no-b.car_no);
+
     rawGroups.forEach(grp => {
       const nums = grp.split('-').map(v=>parseInt(cleanLine(v),10)).filter(Number.isFinite);
       const subset = nums.map(n => group.find(g => g.car_no === n)).filter(Boolean);
@@ -233,19 +271,46 @@ function enrich(racers, lineInput){
         group.splice(0, group.length, ...subset);
       }
     });
+
     const avg = group.reduce((s,r)=>s+r.score,0) / group.length;
+
     group.forEach((r, idx) => {
       r.line_len = group.length;
       r.line_pos = idx + 1;
       r.is_head = idx === 0 ? 1 : 0;
       r.line_strength = avg;
-      r.lead = r.score*0.22 + r.b*4.8 + r.nige*3.5 + r.makuri*2.0 + (r.style==='逃'?10:0) + (r.is_head?8:-3) + r.line_len*2.2;
-      r.chase = r.score*0.26 + r.sashi*2.7 + r.mark*2.6 + (r.line_pos===2?14:0) + (r.line_pos===3?6:0) + r.line_strength*0.2 + (r.style==='追'?8:0);
-      r.attack = r.score*0.22 + r.makuri*3.2 + r.sashi*2.0 + r.nige*1.4 + (r.style==='両'?7:0) + (r.line_len===1?4:0);
+
+      r.lead =
+        r.score * 0.22 +
+        r.b * 4.8 +
+        r.nige * 3.5 +
+        r.makuri * 2.0 +
+        (r.style === '逃' ? 10 : 0) +
+        (r.is_head ? 8 : -3) +
+        r.line_len * 2.2;
+
+      r.chase =
+        r.score * 0.26 +
+        r.sashi * 2.7 +
+        r.mark * 2.6 +
+        (r.line_pos === 2 ? 14 : 0) +
+        (r.line_pos === 3 ? 6 : 0) +
+        r.line_strength * 0.2 +
+        (r.style === '追' ? 8 : 0);
+
+      r.attack =
+        r.score * 0.22 +
+        r.makuri * 3.2 +
+        r.sashi * 2.0 +
+        r.nige * 1.4 +
+        (r.style === '両' ? 7 : 0) +
+        (r.line_len === 1 ? 4 : 0);
     });
   });
+
   return racers.sort((a,b)=>a.car_no-b.car_no);
 }
+
 function parseOdds(text){
   const map = {};
   normalizeText(text).split('\n').forEach(line => {
@@ -254,59 +319,82 @@ function parseOdds(text){
   });
   return map;
 }
+
 function prob(a,b,c){
   const total = a.lead + b.chase + c.attack;
   return Math.max(0.01, Math.min(total / 300, 0.6));
 }
+
 function kelly(p, odds, bankroll = 10000){
   const b = odds - 1;
   if (b <= 0) return 0;
-  let f = ((b*p) - (1-p)) / b;
+  let f = ((b * p) - (1 - p)) / b;
   f = Math.max(0, f) * 0.5;
   let bet = Math.floor(bankroll * f / 100) * 100;
   return Math.max(0, Math.min(bet, bankroll * 0.2));
 }
+
 function buildTickets(racers, oddsMap){
   const tickets = [];
-  for (let i=0;i<racers.length;i++) for (let j=0;j<racers.length;j++) for (let k=0;k<racers.length;k++) {
-    if (i===j || i===k || j===k) continue;
-    const a = racers[i], b = racers[j], c = racers[k];
-    const ticket = `${a.car_no}-${b.car_no}-${c.car_no}`;
-    const p = prob(a,b,c);
-    const odds = oddsMap[ticket] || 0;
-    const ev = odds ? p * odds : 0;
-    tickets.push({ ticket, p, odds, ev, bet: odds ? kelly(p, odds) : 0 });
+  for (let i=0;i<racers.length;i++) {
+    for (let j=0;j<racers.length;j++) {
+      for (let k=0;k<racers.length;k++) {
+        if (i===j || i===k || j===k) continue;
+        const a = racers[i], b = racers[j], c = racers[k];
+        const ticket = `${a.car_no}-${b.car_no}-${c.car_no}`;
+        const p = prob(a,b,c);
+        const odds = oddsMap[ticket] || 0;
+        const ev = odds ? p * odds : 0;
+        tickets.push({
+          ticket,
+          p,
+          odds,
+          ev,
+          bet: odds ? kelly(p, odds) : 0
+        });
+      }
+    }
   }
   tickets.sort((x,y)=>y.ev-x.ev || y.p-x.p);
   return tickets.slice(0, 20);
 }
-function cls(ev){ return ev >= 1.2 ? 'good' : ev >= 1.0 ? 'mid' : 'bad'; }
+
+function cls(ev){
+  return ev >= 1.2 ? 'good' : ev >= 1.0 ? 'mid' : 'bad';
+}
+
 function render(racers, tickets){
   let html = '<div class="card"><h2>解析結果</h2><table class="table"><tr><th>車</th><th>選手</th><th>脚質</th><th>ライン</th><th>主導</th><th>番手</th><th>捲り</th></tr>';
   racers.forEach(r => {
     html += `<tr><td>${r.car_no}</td><td>${r.name}</td><td>${r.style}</td><td>${r.line}</td><td>${r.lead.toFixed(1)}</td><td>${r.chase.toFixed(1)}</td><td>${r.attack.toFixed(1)}</td></tr>`;
   });
   html += '</table></div>';
+
   html += '<div class="card"><h2>買い目候補</h2>';
   tickets.forEach((t, idx) => {
     html += `<div class="ticket"><div><strong>${idx===0?'◎':idx===1?'○':idx===2?'▲':'△'} ${t.ticket}</strong></div><div class="${cls(t.ev)}">EV ${t.ev.toFixed(2)} / 確率 ${t.p.toFixed(3)} / オッズ ${t.odds || '-'} / 推奨 ${t.bet}円</div></div>`;
   });
   html += '</div>';
+
   document.getElementById('out').innerHTML = html;
 }
 
 document.getElementById('analyzeBtn').addEventListener('click', ()=>{
   const msg = document.getElementById('msg');
   msg.textContent = '';
+
   try {
     const racers = parseRaw(document.getElementById('raw').value);
+
     if (racers.length < 3) {
-      msg.textContent = '解析できませんでした。\n今回の貼り付け形式なら、この版で通るはずです。\nそれでも通らない場合は、貼り付け後の文字列をそのまま送ってください。';
+      msg.textContent = '解析できませんでした。貼り付け形式が崩れているか、数字が足りません。';
       document.getElementById('out').innerHTML = '';
       return;
     }
+
     const enriched = enrich(racers, document.getElementById('lineInput').value);
     const tickets = buildTickets(enriched, parseOdds(document.getElementById('odds').value));
+
     msg.textContent = `${racers.length}名を解析しました。`;
     render(enriched, tickets);
   } catch (e) {
