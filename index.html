@@ -283,11 +283,13 @@ function parseRaw(text){
 }
 
 function parseWinticket(text){
-  const lines = String(text || '')
+  const normalized = String(text || '')
     .replace(/[\u2028\u2029]/g, '\n')
     .replace(/[\u00A0\u200B-\u200D\u2060\uFEFF]/g, ' ')
     .replace(/\r/g, '\n')
-    .replace(/　/g, ' ')
+    .replace(/　/g, ' ');
+
+  const lines = normalized
     .split('\n')
     .map(l => l.replace(/[ \t]+/g, ' ').trim())
     .filter(Boolean);
@@ -298,8 +300,8 @@ function parseWinticket(text){
   const isScore = s => /^\d+\.\d+$/.test(s);
   const isInt = s => /^\d+$/.test(s);
   const isStyle = s => /^(逃|両|追)$/.test(s);
-  const isNameLine = s => /[一-龠ぁ-んァ-ン]/.test(s) && !/[ABS]\d/.test(s);
-  const isInfoLine = s => /[一-龠ぁ-んァ-ン]/.test(s) && /A\d|S\d/.test(s);
+  const isNameLine = s => /[一-龠ぁ-んァ-ン]/.test(s) && !/(A\d|S\d)/.test(s);
+  const isInfoLine = s => /[一-龠ぁ-んァ-ン]/.test(s) && /(A\d|S\d)/.test(s);
 
   const headerSet = new Set([
     '枠','車','選手名','AI','競走得点','S','B','脚','逃','捲','差','マ',
@@ -307,98 +309,65 @@ function parseWinticket(text){
   ]);
 
   function isHeaderLine(line){
-    const t = line.replace(/\s+/g, '');
-    return headerSet.has(t);
+    return headerSet.has(line.replace(/\s+/g, ''));
   }
 
   const cleaned = lines.filter(line => !isHeaderLine(line));
 
   let i = 0;
-  while (i < cleaned.length) {
-    if (!isOneDigit(cleaned[i])) {
-      i++;
+  while (i < cleaned.length - 10) {
+    // WINTICKET想定:
+    // 枠, 車, 名前, 情報, 得点, S, B, 脚, 逃, 捲, 差, マ, ...
+    if (
+      isOneDigit(cleaned[i]) &&
+      isOneDigit(cleaned[i + 1]) &&
+      isNameLine(cleaned[i + 2]) &&
+      isInfoLine(cleaned[i + 3]) &&
+      isScore(cleaned[i + 4]) &&
+      isInt(cleaned[i + 5]) &&
+      isInt(cleaned[i + 6]) &&
+      isStyle(cleaned[i + 7]) &&
+      isInt(cleaned[i + 8]) &&
+      isInt(cleaned[i + 9]) &&
+      isInt(cleaned[i + 10]) &&
+      isInt(cleaned[i + 11])
+    ) {
+      const waku = cleaned[i];
+      const carNo = cleaned[i + 1];
+      const name = cleaned[i + 2];
+      const info = cleaned[i + 3];
+      const score = cleaned[i + 4];
+      const sVal = cleaned[i + 5];
+      const bVal = cleaned[i + 6];
+      const style = cleaned[i + 7];
+      const nige = cleaned[i + 8];
+      const makuri = cleaned[i + 9];
+      const sashi = cleaned[i + 10];
+      const mark = cleaned[i + 11];
+
+      const pref = info.split(' ')[0] || '';
+
+      racers.push({
+        car_no: parseInt(carNo, 10),
+        waku_no: parseInt(waku, 10),
+        name,
+        pref,
+        style,
+        score: parseFloat(score) || 0,
+        s: parseInt(sVal, 10) || 0,
+        b: parseInt(bVal, 10) || 0,
+        nige: parseInt(nige, 10) || 0,
+        makuri: parseInt(makuri, 10) || 0,
+        sashi: parseInt(sashi, 10) || 0,
+        mark: parseInt(mark, 10) || 0
+      });
+
+      // 次の選手候補まで進む
+      i += 12;
       continue;
     }
 
-    const blockStart = i;
-    let j = i + 1;
-
-    // 次の「枠番号」までを1ブロック
-    while (j < cleaned.length && !isOneDigit(cleaned[j])) {
-      j++;
-    }
-
-    const block = cleaned.slice(blockStart, j);
-
-    // 想定:
-    // [枠, 車, 名前, 情報, 得点, S, B, 脚, 逃, 捲, 差, マ, 1着, 2着, 3着, 着外, ...]
-    if (block.length < 12) {
-      i = j;
-      continue;
-    }
-
-    let ptr = 0;
-
-    const waku = block[ptr++];
-    let carNo = waku;
-
-    // 次が1桁数字なら「車番」
-    if (ptr < block.length && isOneDigit(block[ptr])) {
-      carNo = block[ptr++];
-    }
-
-    const name = block[ptr] || '';
-    if (!isNameLine(name)) {
-      i = j;
-      continue;
-    }
-    ptr++;
-
-    const info = block[ptr] || '';
-    if (!isInfoLine(info)) {
-      i = j;
-      continue;
-    }
-    ptr++;
-
-    const score = block[ptr] || '';
-    if (!isScore(score)) {
-      i = j;
-      continue;
-    }
-    ptr++;
-
-    // ここから数値と脚質を拾う
-    // 期待:
-    // S, B, 脚, 逃, 捲, 差, マ, 1着, 2着, 3着, 着外 ...
-    let sVal = 0, bVal = 0, style = '両', nige = 0, makuri = 0, sashi = 0, mark = 0;
-
-    if (ptr < block.length && isInt(block[ptr])) sVal = parseInt(block[ptr++], 10) || 0;
-    if (ptr < block.length && isInt(block[ptr])) bVal = parseInt(block[ptr++], 10) || 0;
-    if (ptr < block.length && isStyle(block[ptr])) style = block[ptr++];
-
-    if (ptr < block.length && isInt(block[ptr])) nige = parseInt(block[ptr++], 10) || 0;
-    if (ptr < block.length && isInt(block[ptr])) makuri = parseInt(block[ptr++], 10) || 0;
-    if (ptr < block.length && isInt(block[ptr])) sashi = parseInt(block[ptr++], 10) || 0;
-    if (ptr < block.length && isInt(block[ptr])) mark = parseInt(block[ptr++], 10) || 0;
-
-    const pref = info.split(' ')[0] || '';
-
-    racers.push({
-      car_no: parseInt(carNo, 10),
-      name,
-      pref,
-      style,
-      score: parseFloat(score) || 0,
-      s: sVal,
-      b: bVal,
-      nige,
-      makuri,
-      sashi,
-      mark
-    });
-
-    i = j;
+    i++;
   }
 
   return racers.sort((a, b) => a.car_no - b.car_no);
