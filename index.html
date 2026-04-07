@@ -307,6 +307,7 @@ function parseRaw(text){
   return map;
 }
 
+
 function enrich(racers, lineInput){
   const lineMap = parseLines(lineInput, racers);
   racers.forEach(r => r.line = lineMap[r.car_no]);
@@ -362,11 +363,35 @@ function enrich(racers, lineInput){
         r.nige * 1.4 +
         (r.style === '両' ? 7 : 0) +
         (r.line_len === 1 ? 4 : 0);
+
+      // 番手離れリスク
+      if (r.line_pos === 2) {
+        const head = group[0];
+        r.follow_risk = Math.max(0, (head.lead - r.chase) / 100);
+      } else {
+        r.follow_risk = 0;
+      }
     });
   });
 
   return racers.sort((a,b)=>a.car_no-b.car_no);
 }
+
+
+function detectRaceFlow(racers){
+  const heads = racers.filter(r => r.line_pos === 1);
+  const strongLeads = heads.filter(r => r.lead >= 90);
+  const highB = heads.filter(r => r.b >= 8);
+
+  return {
+    smooth: !(strongLeads.length >= 2 && highB.length >= 2) &&
+            !(strongLeads.length >= 1 && racers.some(r => r.line_pos === 2 && r.chase >= 75)),
+    earlyPace: !(strongLeads.length >= 2 && highB.length >= 2) &&
+               (strongLeads.length >= 1 && racers.some(r => r.line_pos === 2 && r.chase >= 75)),
+    duel: strongLeads.length >= 2 && highB.length >= 2
+  };
+}
+
 
 function parseOdds(text){
   const map = {};
@@ -377,10 +402,40 @@ function parseOdds(text){
   return map;
 }
 
-function prob(a,b,c){
-  const total = a.lead + b.chase + c.attack;
+
+function prob(a,b,c, flow){
+  let total = a.lead + b.chase + c.attack;
+
+  // すんなり先行
+  if (flow.smooth) {
+    if (a.line_pos === 1 && b.line_pos === 2) total *= 1.08;
+    if (a.line_pos !== 1) total *= 0.94;
+  }
+
+  // 早駆けで番手有利
+  if (flow.earlyPace) {
+    if (a.line_pos === 2) total *= 1.08;
+    if (b.line_pos === 1) total *= 1.04;
+  }
+
+  // 踏み合いで番手・単騎・自在が浮上
+  if (flow.duel) {
+    if (a.line_pos === 2) total *= 1.06;
+    if (b.line_pos === 2) total *= 1.05;
+    if (b.line_len === 1 || b.style === '両') total *= 1.05;
+    if (c.line_len === 1 || c.style === '両') total *= 1.07;
+  }
+
+  // 番手離れリスク
+  if (b.line_pos === 2 && b.follow_risk > 0.18) total *= 0.82;
+
+  // 単騎・自在の2,3着差し込み
+  if (b.line_len === 1 || b.style === '両') total *= 1.03;
+  if (c.line_len === 1 || c.style === '両') total *= 1.05;
+
   return Math.max(0.01, Math.min(total / 300, 0.6));
 }
+
 
 function kelly(p, odds, bankroll = 10000){
   const b = odds - 1;
@@ -391,17 +446,21 @@ function kelly(p, odds, bankroll = 10000){
   return Math.max(0, Math.min(bet, bankroll * 0.2));
 }
 
+
 function buildTickets(racers, oddsMap){
   const tickets = [];
+  const flow = detectRaceFlow(racers);
+
   for (let i=0;i<racers.length;i++) {
     for (let j=0;j<racers.length;j++) {
       for (let k=0;k<racers.length;k++) {
         if (i===j || i===k || j===k) continue;
         const a = racers[i], b = racers[j], c = racers[k];
         const ticket = `${a.car_no}-${b.car_no}-${c.car_no}`;
-        const p = prob(a,b,c);
+        const p = prob(a,b,c, flow);
         const odds = oddsMap[ticket] || 0;
         const ev = odds ? p * odds : 0;
+
         tickets.push({
           ticket,
           p,
@@ -412,6 +471,7 @@ function buildTickets(racers, oddsMap){
       }
     }
   }
+
   tickets.sort((x,y)=>y.ev-x.ev || y.p-x.p);
   return tickets.slice(0, 20);
 }
