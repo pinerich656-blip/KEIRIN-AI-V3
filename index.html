@@ -21,8 +21,7 @@ small{color:#94a3b8}
 <div class="card">
 <h2>1. 出走表を貼る</h2>
 <textarea id="raw" rows="18" placeholder="ここに貼り付け"></textarea>
-<small>今回の貼り付け形式に合わせて修正。壊れた見出し、不可視文字、追加表記を無視します。</small>
-<button id="sampleBtn" type="button">サンプル投入</button>
+<small>WINTICKETの出走表をそのまま貼り付け。壊れた改行や不可視文字も自動で整形します。</small>
 </div>
 <div class="card">
 <h2>2. 並び</h2>
@@ -37,9 +36,9 @@ small{color:#94a3b8}
 </div>
 <div class="card">
   <div style="display:flex; gap:10px;">
-    <button id="analyzeBtn" type="button">解析する</button>
-    <button id="clearBtn" type="button" style="background:#ef4444;">全てクリア</button>
-  </div>
+  <button id="analyzeBtn" type="button" style="flex:1;">解析する</button>
+  <button id="clearBtn" type="button" style="background:#ef4444; flex:1;">全てクリア</button>
+</div>
   <div id="msg"></div>
 </div>
 <div class="card">
@@ -48,99 +47,7 @@ small{color:#94a3b8}
 </div>
  <div id="out"></div>
 <script>
-const sample = `枠 番
-車 番
-選手名
-府県/級班前現/脚質
-競走得点
-逃
-捲
-差
-マ
-Ｂ
-調 子
 
-1
-野木　義規
-北海道/A2A3/追
-74.75
-0
-0
-3
-9
-0
- 
-
-2
-布居　翼
-和歌山/A3A3/逃
-74.24
-1
-3
-7
-2
-9
- 
-
-3
-古閑　良介追加
-福　岡/A3A3/追
-71.26
-0
-1
-2
-1
-0
- 
-
-4
-葉狩　伸泰
-大　阪/A3A3/両
-68.77
-0
-2
-0
-0
-0
- 
-
-5
-古田　義明
-三　重/A3A3/追
-67.64
-0
-0
-0
-1
-0
- 
-
-6
-森下　忠夫
-高　知/A3A3/追
-66.65
-0
-0
-1
-1
-0
- 
-
-7
-関口　朗斗
-群　馬/A3A3/逃
-0.00
-0
-0
-0
-0
-0`;
-
-document.getElementById('sampleBtn').addEventListener('click', ()=>{
-  document.getElementById('raw').value = sample;
-  document.getElementById('lineInput').value = '2-4 / 1 / 3 / 5 / 6 / 7';
-  document.getElementById('msg').textContent = 'サンプルを入れました。';
-});
 
 function normalizeText(s){
   return String(s || '')
@@ -653,10 +560,6 @@ if (a.line === b.line && b.line === c.line) total *= 1.08;
     if (b.line_len === 1 || b.style === '両') total *= 1.05;
     if (c.line_len === 1 || c.style === '両') total *= 1.06;
   }
-
-  // 本線ライン優遇
-  if (a.line === b.line) total *= 1.08;
-  if (a.line === b.line && b.line === c.line) total *= 1.05;
 
   // 長いライン優遇、単騎は少し不利
   if (a.line_len >= 3) total *= 1.08;
