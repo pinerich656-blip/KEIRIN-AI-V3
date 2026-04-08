@@ -61,137 +61,6 @@ function cleanLine(s){
   return normalizeText(s).replace(/[ \t]+/g, ' ').trim();
 }
 
-function normalizedHeaderKey(s){
-  return cleanLine(s).replace(/[\s/]+/g, '').replace(/Ｂ/g,'B');
-}
-
-function isHeaderLine(s){
-  const t = normalizedHeaderKey(s);
-  return ['枠番','車番','選手名','府県級班前現脚質','競走得点','逃','捲','差','マ','B','調子'].includes(t);
-}
-
-function isInfoLine(s){
-  return /\/.+\//.test(s);
-}
-
-function parseRaw(text){
-  const normalized = String(text || '')
-    .replace(/[\u2028\u2029]/g, '\n')
-    .replace(/[\u00A0\u200B-\u200D\u2060\uFEFF]/g, ' ')
-    .replace(/\r/g, '\n')
-    .replace(/　/g, ' ');
-
-  const rawLines = normalized
-    .split('\n')
-    .map(s => s.replace(/[ \t]+/g, ' ').trim())
-    .filter(Boolean);
-
-  const filtered = rawLines.filter(line => {
-    const t = line.replace(/\s+/g, '').replace(/Ｂ/g, 'B');
-    if ([
-      '枠', '番', '車', '選手名', '競走得点', '逃', '捲', '差', 'マ', 'B', '調', '子',
-      '枠番', '車番', '調子', '府県級班前現脚質'
-    ].includes(t)) return false;
-    if (t === '府県/級班前現/脚質'.replace(/\s+/g, '')) return false;
-    return true;
-  });
-
-  const racers = [];
-  let i = 0;
-
-  while (i < filtered.length) {
-    if (!/^\d+$/.test(filtered[i])) {
-      i++;
-      continue;
-    }
-
-    const carNo = parseInt(filtered[i], 10);
-    const name = filtered[i + 1] || '';
-    const info = filtered[i + 2] || '';
-    const numLine = filtered[i + 3] || '';
-
-    if (!name || !/\/.+\//.test(info)) {
-      i++;
-      continue;
-    }
-
-    // 数字6個を1行から読む
-    const nums = numLine.split(' ').filter(Boolean);
-
-    if (nums.length >= 6 &&
-        /^-?\d+(?:\.\d+)?$/.test(nums[0]) &&
-        /^-?\d+$/.test(nums[1]) &&
-        /^-?\d+$/.test(nums[2]) &&
-        /^-?\d+$/.test(nums[3]) &&
-        /^-?\d+$/.test(nums[4]) &&
-        /^-?\d+$/.test(nums[5])) {
-
-      const safeName = name.replace(/追加/g, '').trim();
-      const parts = info.split('/').map(v => v.trim());
-      const pref = (parts[0] || '').replace(/\s+/g, '');
-      const style = ((parts[2] || '両').match(/[逃両追]/) || ['両'])[0];
-
-      racers.push({
-        car_no: carNo,
-        name: safeName,
-        pref,
-        style,
-        score: parseFloat(nums[0]) || 0,
-        nige: parseInt(nums[1], 10) || 0,
-        makuri: parseInt(nums[2], 10) || 0,
-        sashi: parseInt(nums[3], 10) || 0,
-        mark: parseInt(nums[4], 10) || 0,
-        b: parseInt(nums[5], 10) || 0
-      });
-
-      i += 4;
-      continue;
-    }
-
-    // 旧形式: 数字が縦並び6行
-    const score = filtered[i + 3] || '';
-    const nige = filtered[i + 4] || '';
-    const makuri = filtered[i + 5] || '';
-    const sashi = filtered[i + 6] || '';
-    const mark = filtered[i + 7] || '';
-    const b = filtered[i + 8] || '';
-
-    if (
-      /^-?\d+(?:\.\d+)?$/.test(score) &&
-      /^-?\d+$/.test(nige) &&
-      /^-?\d+$/.test(makuri) &&
-      /^-?\d+$/.test(sashi) &&
-      /^-?\d+$/.test(mark) &&
-      /^-?\d+$/.test(b)
-    ) {
-      const safeName = name.replace(/追加/g, '').trim();
-      const parts = info.split('/').map(v => v.trim());
-      const pref = (parts[0] || '').replace(/\s+/g, '');
-      const style = ((parts[2] || '両').match(/[逃両追]/) || ['両'])[0];
-
-      racers.push({
-        car_no: carNo,
-        name: safeName,
-        pref,
-        style,
-        score: parseFloat(score) || 0,
-        nige: parseInt(nige, 10) || 0,
-        makuri: parseInt(makuri, 10) || 0,
-        sashi: parseInt(sashi, 10) || 0,
-        mark: parseInt(mark, 10) || 0,
-        b: parseInt(b, 10) || 0
-      });
-
-      i += 9;
-      continue;
-    }
-
-    i++;
-  }
-
-  return racers.sort((a, b) => a.car_no - b.car_no);
-}
-
 function parseWinticket(text){
   const lines = String(text || '')
     .replace(/[\u2028\u2029]/g, '\n')
@@ -525,12 +394,12 @@ function prob(a,b,c, flow){
     c.attack * 0.8;
 
   // 逃げ1強で対抗不在なら信頼度アップ
-if (a.lead >= 130 && a.b >= 10) {
+  if (a.lead >= 130 && a.b >= 10) {
   total *= 1.25;
 }
 
 // 番手も強いならさらに安定
-if (a.lead >= 130 && b.chase >= 85) {
+  if (a.lead >= 130 && b.chase >= 85) {
   total *= 1.15;
 }
   
@@ -540,8 +409,8 @@ if (a.lead >= 130 && b.chase >= 85) {
   if (a.line_pos === 2) total *= 0.96;
 
   // ライン決着の安定強化（←これ追加）
-if (a.line === b.line) total *= 1.12;
-if (a.line === b.line && b.line === c.line) total *= 1.08;
+  if (a.line === b.line) total *= 1.12;
+  if (a.line === b.line && b.line === c.line) total *= 1.08;
   
   // 基本
   if (flow.smooth) {
