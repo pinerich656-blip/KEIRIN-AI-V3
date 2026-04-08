@@ -834,7 +834,11 @@ const pricedTickets = sortedTickets.filter(t => t.odds > 0);
 // 本線は人気順を少し優先
 const hon = pricedTickets
   .filter(t => t.bucket === '本線')
-  .sort((a,b) => (a.rank || 999) - (b.rank || 999) || b.score - a.score)
+  .sort((a,b) => {
+    if (mainTickets.includes(a.ticket) && !mainTickets.includes(b.ticket)) return -1;
+    if (!mainTickets.includes(a.ticket) && mainTickets.includes(b.ticket)) return 1;
+    return (a.rank || 999) - (b.rank || 999) || b.score - a.score;
+  })
   .slice(0, 8);
 
 const chu = pricedTickets
