@@ -676,15 +676,10 @@ function addMainLineTickets(racers, lineInput){
 }
 
 function classifyTicket(t){
-  if (!t.odds) return '本線';
+  if (!t.odds) return '中穴';
 
-  // 本線: 人気上位〜中位で、確率もある
   if (t.rank && t.rank <= 10 && t.p >= 0.30) return '本線';
-
-  // 大穴: 人気薄で高オッズ
   if ((t.rank && t.rank >= 25) || t.odds >= 80) return '大穴';
-
-  // それ以外
   return '中穴';
 }
   
