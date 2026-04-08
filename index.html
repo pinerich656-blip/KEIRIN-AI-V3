@@ -380,26 +380,7 @@ if (
   const sashi = lines[i + 9];
   const mark = lines[i + 10];
 
-  const pref = info.split(' ')[0] || '';
-
-  racers.push({
-    car_no: parseInt(carNo, 10),
-    waku_no: parseInt(waku, 10),
-    name,
-    pref,
-    style,
-    score: parseFloat(score) || 0,
-    s: parseInt(sVal, 10) || 0,
-    b: parseInt(bVal, 10) || 0,
-    nige: parseInt(nige, 10) || 0,
-    makuri: parseInt(makuri, 10) || 0,
-    sashi: parseInt(sashi, 10) || 0,
-    mark: parseInt(mark, 10) || 0
-  });
-
-  i += 11;
-  continue;
-}
+  
 
       const pref = info.split(' ')[0] || '';
 
