@@ -472,11 +472,15 @@ function detectRaceFlow(racers){
 
 function parseOdds(text){
   const map = {};
-  const lines = normalizeText(text).split('\n').map(cleanLine).filter(Boolean);
+
+  const normalized = normalizeText(text);
+
+  // まず行ごとに読む
+  const lines = normalized.split('\n').map(cleanLine).filter(Boolean);
 
   lines.forEach((line, idx) => {
     // 形式1: 1-3-4=11.1
-    let m = line.match(/^(\d-\d-\d)\s*=\s*([0-9]+(?:\.[0-9]+)?)$/);
+    let m = line.match(/^([1-9]-[1-9]-[1-9])\s*=\s*([0-9]+(?:\.[0-9]+)?)$/);
     if (m) {
       map[m[1]] = {
         odds: parseFloat(m[2]),
@@ -485,7 +489,7 @@ function parseOdds(text){
       return;
     }
 
-    // 形式2: 1 1 3 4 11.1 みたいな崩れた人気順データ
+    // 形式2: 1 1 3 4 11.1
     const nums = line.match(/[0-9]+(?:\.[0-9]+)?/g);
     if (nums && nums.length >= 5) {
       const rank = parseInt(nums[0], 10);
@@ -495,13 +499,51 @@ function parseOdds(text){
       const odds = parseFloat(nums[4]);
 
       if (/^[1-9]$/.test(a) && /^[1-9]$/.test(b) && /^[1-9]$/.test(c) && odds > 0) {
-        map[`${a}-${b}-${c}`] = {
-          odds,
-          rank
-        };
+        map[`${a}-${b}-${c}`] = { odds, rank };
       }
     }
   });
+
+  // 次に、崩れた人気順コピペ全体を一気に拾う
+  // 例:
+  // 1
+  // 1
+  // 3
+  // 4
+  // 11.1
+  // 2
+  // 2
+  // 3
+  // 6
+  // 14.1
+  const tokens = normalized
+    .replace(/[•・]/g, ' ')
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(Boolean)
+    .filter(t => /^[0-9]+(?:\.[0-9]+)?$/.test(t));
+
+  for (let i = 0; i <= tokens.length - 5; i++) {
+    const rank = parseInt(tokens[i], 10);
+    const a = tokens[i + 1];
+    const b = tokens[i + 2];
+    const c = tokens[i + 3];
+    const odds = parseFloat(tokens[i + 4]);
+
+    if (
+      Number.isInteger(rank) &&
+      /^[1-9]$/.test(a) &&
+      /^[1-9]$/.test(b) &&
+      /^[1-9]$/.test(c) &&
+      ![a,b,c].some((x,idx,arr)=>arr.indexOf(x)!==idx) &&
+      odds > 0
+    ) {
+      const key = `${a}-${b}-${c}`;
+      if (!map[key]) {
+        map[key] = { odds, rank };
+      }
+    }
+  }
 
   return map;
 }
