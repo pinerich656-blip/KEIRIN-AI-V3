@@ -635,15 +635,17 @@ function buildTickets(racers, oddsMap){
         // 人気補正込みの総合スコア
         const score = ev * 0.7 + p * 30 + rankBoost(rank) * 5;
 
-        tickets.push({
-          ticket,
-          p,
-          odds,
-          rank,
-          ev,
-          score,
-          bet: odds ? kelly(p, odds) : 0
-        });
+        const item = {
+  ticket,
+  p,
+  odds,
+  rank,
+  ev,
+  score,
+  bet: odds ? kelly(p, odds) : 0
+};
+item.bucket = classifyTicket(item);
+tickets.push(item);
       }
     }
   }
@@ -672,11 +674,24 @@ function addMainLineTickets(racers, lineInput){
 
   return results;
 }
+
+function classifyTicket(t){
+  if (!t.odds) return '本線';
+
+  // 本線: 人気上位〜中位で、確率もある
+  if (t.rank && t.rank <= 10 && t.p >= 0.30) return '本線';
+
+  // 大穴: 人気薄で高オッズ
+  if ((t.rank && t.rank >= 25) || t.odds >= 80) return '大穴';
+
+  // それ以外
+  return '中穴';
+}
   
 function cls(ev){
   return ev >= 1.2 ? 'good' : ev >= 1.0 ? 'mid' : 'bad';
 }
-
+  
 function render(racers, tickets){
   let html = '<div class="card"><h2>解析結果</h2><table class="table"><tr><th>車</th><th>選手</th><th>脚質</th><th>ライン</th><th>主導</th><th>番手</th><th>捲り</th></tr>';
   racers.forEach(r => {
@@ -684,11 +699,26 @@ function render(racers, tickets){
   });
   html += '</table></div>';
 
-  html += '<div class="card"><h2>買い目候補</h2>';
-  tickets.forEach((t, idx) => {
-    html += `<div class="ticket"><div><strong>${idx===0?'◎':idx===1?'○':idx===2?'▲':'△'} ${t.ticket}</strong></div><div class="${cls(t.ev)}">人気 ${t.rank || '-'} / EV ${t.ev.toFixed(2)} / 確率 ${t.p.toFixed(3)} / オッズ ${t.odds || '-'} / 推奨 ${t.bet}円</div></div>`;
-  });
-  html += '</div>';
+  const hon = tickets.filter(t => t.bucket === '本線');
+  const chu = tickets.filter(t => t.bucket === '中穴');
+  const dai = tickets.filter(t => t.bucket === '大穴');
+
+  function block(title, arr){
+    let s = `<div class="card"><h2>${title}</h2>`;
+    if (!arr.length) {
+      s += `<div class="ticket">候補なし</div></div>`;
+      return s;
+    }
+    arr.forEach((t, idx) => {
+      s += `<div class="ticket"><div><strong>${idx===0?'◎':idx===1?'○':idx===2?'▲':'△'} ${t.ticket}</strong></div><div class="${cls(t.ev)}">人気 ${t.rank || '-'} / EV ${t.ev.toFixed(2)} / 確率 ${t.p.toFixed(3)} / オッズ ${t.odds || '-'} / 推奨 ${t.bet}円</div></div>`;
+    });
+    s += `</div>`;
+    return s;
+  }
+
+  html += block('本線', hon);
+  html += block('中穴', chu);
+  html += block('大穴', dai);
 
   document.getElementById('out').innerHTML = html;
 }
