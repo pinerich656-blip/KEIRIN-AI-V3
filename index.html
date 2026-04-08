@@ -687,7 +687,7 @@ function buildTickets(racers, oddsMap){
         const ev = odds ? p * odds : 0;
 
         // 人気補正込みの総合スコア
-        const score = ev * 0.85 + p * 18 + rankBoost(rank) * 2;
+        const score = ev * 0.75 + p * 22 + rankBoost(rank) * 3;
 
         const item = {
   ticket,
